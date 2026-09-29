@@ -60,4 +60,5 @@ Team Member Signatures:
 Christina Pu
 Chris Guo
 Andy Li
+Kevin Li
 (type names here)
