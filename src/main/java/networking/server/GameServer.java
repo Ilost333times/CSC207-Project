@@ -11,10 +11,12 @@ import org.java_websocket.server.WebSocketServer;
 public class GameServer extends WebSocketServer {
     private final MessageCodec codec = new MessageCodec();
     private final MessageRouter<WebSocket> lobbyRouter;
+    private final RoomManager roomManager;
 
-    public GameServer(int port,  MessageRouter<WebSocket> lobbyRouter) {
+    public GameServer(int port,  MessageRouter<WebSocket> lobbyRouter,  RoomManager roomManager) {
         super(new InetSocketAddress(port));
         this.lobbyRouter = lobbyRouter;
+        this.roomManager = roomManager;
     }
 
     @Override
@@ -29,9 +31,8 @@ public class GameServer extends WebSocketServer {
         if (lobbyRouter.hasListener(message.type())) {
             lobbyRouter.dispatch(conn, message);
         } else {
-            //TODO: Implement GameRoom Manager
-//            GameRoom room = roomManager.getRoom(conn);
-//            room.getRouter().dispatch(conn, message);
+            GameRoom room = roomManager.getGameRoom(conn);
+            room.getRouter().dispatch(conn, message);
         }
     }
 
