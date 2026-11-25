@@ -3,6 +3,7 @@ package entity.deck;
 import entity.card.Card;
 
 import java.util.Collections;
+import java.util.List;
 import java.util.Random;
 import java.util.Stack;
 
@@ -29,4 +30,7 @@ public class Deck {
     public boolean isEmpty() { return this.deck.isEmpty(); }
 
     public int size()        { return this.deck.size(); }
+
+    /** Read-only snapshot retaining the canonical card instances. */
+    public List<Card> getCards() { return List.copyOf(deck); }
 }

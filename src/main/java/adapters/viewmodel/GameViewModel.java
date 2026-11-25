@@ -15,17 +15,26 @@ public record GameViewModel(
         List<CardViewData> hand,
         int drawCount,
         int discardCount,
-        CardViewData topDiscard
+        CardViewData topDiscard,
+        long movementRevision,
+        String moveFeedback
 ) {
     public static final int BOARD_SIZE = 6;
 
     public GameViewModel {
         Objects.requireNonNull(gameStatus);
+        Objects.requireNonNull(moveFeedback);
         board = List.copyOf(board);
         if (board.size() != BOARD_SIZE * BOARD_SIZE) {
             throw new IllegalArgumentException("Expected " + (BOARD_SIZE * BOARD_SIZE) + " board tiles in row-major order.");
         }
         hand = List.copyOf(hand);
+    }
+
+    /** Preserves existing callers, including the menu/artwork preview. */
+    public GameViewModel(String gameStatus, int remainingTurnSeconds, List<TileViewData> board,
+                         List<CardViewData> hand, int drawCount, int discardCount, CardViewData topDiscard) {
+        this(gameStatus, remainingTurnSeconds, board, hand, drawCount, discardCount, topDiscard, 0, "");
     }
 
     public static GameViewModel empty() {
@@ -47,11 +56,19 @@ public record GameViewModel(
     }
 
     public GameViewModel withRemainingTurnSeconds(int seconds) {
-        return new GameViewModel(gameStatus, seconds, board, hand, drawCount, discardCount, topDiscard);
+        return new GameViewModel(gameStatus, seconds, board, hand, drawCount, discardCount, topDiscard,
+                movementRevision, moveFeedback);
     }
 
     public GameViewModel withGameStatus(String status) {
-        return new GameViewModel(status, remainingTurnSeconds, board, hand, drawCount, discardCount, topDiscard);
+        return new GameViewModel(status, remainingTurnSeconds, board, hand, drawCount, discardCount, topDiscard,
+                movementRevision, moveFeedback);
+    }
+
+    /** Presentation invalidation only: this is not an authoritative game/network revision. */
+    public GameViewModel withMovementUpdate(List<TileViewData> updatedBoard, String feedback) {
+        return new GameViewModel(gameStatus, remainingTurnSeconds, updatedBoard, hand, drawCount,
+                discardCount, topDiscard, movementRevision + 1, feedback);
     }
 
     /** A tile may have an occupant and attached spells controlled by either player. */

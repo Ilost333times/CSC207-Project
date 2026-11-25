@@ -1,9 +1,11 @@
 package view;
 
+import adapters.controller.ConfirmMoveController;
 import adapters.viewmodel.GameViewModel;
 import adapters.viewmodel.GameViewModel.CardViewData;
 import adapters.viewmodel.GameViewModel.TileViewData;
 import adapters.viewmodel.ViewState;
+import entity.board.BoardPosition;
 import view.GameArtwork.Portrait;
 
 import javax.swing.BorderFactory;
@@ -32,6 +34,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.Set;
 
 /** Swing match screen. Create and update it on the Swing event dispatch thread. */
 public final class GameView extends JPanel implements PropertyChangeListener {
@@ -43,7 +46,15 @@ public final class GameView extends JPanel implements PropertyChangeListener {
     private final JLabel gameStatus = GameViewStyle.label("");
     private final JLabel timer = GameViewStyle.label("");
     private final BoardPanel boardPanel = new BoardPanel((position, spellIndex) ->
-            inspect(new TileInspection(position, spellIndex)));
+            inspect(new TileInspection(position, spellIndex)), this::selectMovementTile);
+    private final ConfirmMoveController moveController;
+    private final JButton confirmMove = GameViewStyle.button("Confirm Move");
+    private final JButton cancelMove = GameViewStyle.button("Cancel Move");
+    private final JLabel moveFeedback = GameViewStyle.label("");
+    private Point selectedSource;
+    private Point selectedDestination;
+    private Set<BoardPosition> validDestinations = Set.of();
+    private boolean submittingMove;
     private Portrait previewPortrait;
     private final JLabel cardPreview = new JLabel() {
         @Override
@@ -66,7 +77,27 @@ public final class GameView extends JPanel implements PropertyChangeListener {
     private Inspection inspection;
 
     public GameView() {
+        this(null);
+    }
+
+    /** Local synchronous movement controller; the no-argument preview remains supported. */
+    public GameView(ConfirmMoveController moveController) {
         super(new BorderLayout(0, GameViewStyle.GAP));
+        this.moveController = moveController;
+        confirmMove.setName("confirm-move");
+        cancelMove.setName("cancel-move");
+        moveFeedback.setName("move-feedback");
+        cardPreview.setName("card-preview");
+        gameStatus.setName("game-status");
+        confirmMove.setEnabled(false);
+        cancelMove.setEnabled(false);
+        confirmMove.addActionListener(event -> confirmSelectedMove());
+        cancelMove.addActionListener(event -> {
+            if (!submittingMove) {
+                clearMovementSelection();
+                moveFeedback.setText("Move canceled.");
+            }
+        });
         setBackground(GameViewStyle.BACKGROUND);
         int padding = GameViewStyle.PAGE_PADDING;
         setBorder(BorderFactory.createEmptyBorder(padding, padding, padding, padding));
@@ -104,6 +135,15 @@ public final class GameView extends JPanel implements PropertyChangeListener {
 
         boolean boardChanged = previous == null || !previous.board().equals(model.board());
         boolean handChanged = previous == null || !previous.hand().equals(model.hand());
+        boolean movementChanged = previous != null && (boardChanged
+                || previous.movementRevision() != model.movementRevision()
+                || !previous.gameStatus().equals(model.gameStatus()));
+        if (movementChanged) {
+            clearMovementSelection();
+        }
+        if (previous == null || movementChanged || !previous.moveFeedback().equals(model.moveFeedback())) {
+            moveFeedback.setText(model.moveFeedback());
+        }
         if (boardChanged) {
             boardPanel.showBoard(model, artwork);
         }
@@ -119,6 +159,73 @@ public final class GameView extends JPanel implements PropertyChangeListener {
                 || !Objects.equals(previous.topDiscard(), model.topDiscard())) {
             showPiles(model.drawCount(), model.discardCount(), model.topDiscard());
         }
+    }
+
+    private void selectMovementTile(Point position) {
+        if (moveController == null || submittingMove) {
+            return;
+        }
+        if (position.equals(selectedSource)) {
+            clearMovementSelection();
+            moveFeedback.setText("Move canceled.");
+            return;
+        }
+        if (selectedSource != null && validDestinations.contains(new BoardPosition(position.x, position.y))) {
+            selectedDestination = new Point(position);
+            confirmMove.setEnabled(true);
+            moveFeedback.setText("Move " + coordinate(selectedSource) + " to " + coordinate(position) + "? Press Confirm Move.");
+            return;
+        }
+        var card = model.tileAt(position.x, position.y).occupant();
+        // Card type is presentation data; actual eligibility comes only from the use case.
+        if (card == null || card.type() != GameViewModel.CardType.CHARACTER) {
+            return;
+        }
+        Set<BoardPosition> destinations = moveController.getValidDestinations(position.x, position.y);
+        if (destinations.isEmpty()) {
+            moveFeedback.setText("No movement destinations available for this character.");
+            return;
+        }
+        selectedSource = new Point(position);
+        selectedDestination = null;
+        validDestinations = Set.copyOf(destinations);
+        setHighlightedTiles(validDestinations.stream().map(tile -> new Point(tile.x(), tile.y())).toList());
+        confirmMove.setEnabled(false);
+        cancelMove.setEnabled(true);
+        moveFeedback.setText("Select a highlighted destination for " + coordinate(position) + ".");
+    }
+
+    private void confirmSelectedMove() {
+        if (submittingMove || selectedSource == null || selectedDestination == null) {
+            return;
+        }
+        Point source = selectedSource;
+        Point destination = selectedDestination;
+        submittingMove = true;
+        confirmMove.setEnabled(false);
+        cancelMove.setEnabled(false);
+        try {
+            // Final validation always runs in the interactor against the current game.
+            moveController.onConfirmMoveClicked(source.x, source.y, destination.x, destination.y);
+        } finally {
+            submittingMove = false;
+            clearMovementSelection();
+        }
+    }
+
+    private void clearMovementSelection() {
+        if (selectedSource != null) {
+            clearHighlights();
+        }
+        selectedSource = null;
+        selectedDestination = null;
+        validDestinations = Set.of();
+        confirmMove.setEnabled(false);
+        cancelMove.setEnabled(false);
+    }
+
+    private String coordinate(Point position) {
+        return String.valueOf((char) ('A' + position.x)) + (position.y + 1);
     }
 
     /** Displays an image across the board. Pass null to use the plain grid. */
@@ -227,8 +334,16 @@ public final class GameView extends JPanel implements PropertyChangeListener {
         });
         JPanel actions = new JPanel(new BorderLayout());
         actions.setOpaque(false);
+        JPanel movement = new JPanel();
+        movement.setOpaque(false);
+        movement.setLayout(new BoxLayout(movement, BoxLayout.Y_AXIS));
+        movement.add(confirmMove);
+        movement.add(Box.createVerticalStrut(GameViewStyle.CARD_GAP));
+        movement.add(cancelMove);
+        actions.add(movement, BorderLayout.NORTH);
         actions.add(pass, BorderLayout.SOUTH);
         footer.add(actions, BorderLayout.EAST);
+        footer.add(moveFeedback, BorderLayout.NORTH);
 
         return footer;
     }

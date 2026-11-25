@@ -1,6 +1,8 @@
 package entity;
 
 import entity.board.Board;
+import entity.card.Card;
+import entity.card.CharacterCard;
 import entity.deck.Deck;
 import entity.deck.DeckFactory;
 
@@ -72,6 +74,44 @@ public class Game {
     /// Ends the current turn
     /// TODO: Part of 'End Turn' Use Case
     public void endTurn() {}
+
+    public Board getBoard() { return board; }
+
+    public synchronized Player getCurrentPlayer() {
+        return players.isEmpty() ? null : players.get(turn);
+    }
+
+    /**
+     * Turn lifecycle hook for End Turn to call after its other work succeeds.
+     * Does not draw cards, check wins, or implement the End Turn use case.
+     * Match actions, including future casts, must synchronize on this Game.
+     */
+    public synchronized void beginNextTurn() {
+        if (players.isEmpty()) {
+            throw new IllegalStateException("There are no players in this game.");
+        }
+        turn = (turn + 1) % maxTurn;
+        Player owner = getCurrentPlayer();
+        for (int x = 0; x < 6; x++) {
+            for (int y = 0; y < 6; y++) {
+                resetOwnedCharacter(board.getTile(x, y).getCharacterCard(), owner);
+            }
+        }
+        // Include off-board cards so replaying one cannot retain stale action flags.
+        for (HashMap<Player, Deck> piles : List.of(drawPiles, handPiles, discardPiles)) {
+            for (Deck pile : piles.values()) {
+                for (Card card : pile.getCards()) {
+                    resetOwnedCharacter(card, owner);
+                }
+            }
+        }
+    }
+
+    private void resetOwnedCharacter(Card card, Player owner) {
+        if (card instanceof CharacterCard character && character.getOwner() == owner) {
+            character.resetTurnActions();
+        }
+    }
 
     ///
 

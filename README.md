@@ -69,6 +69,29 @@ Andy Li: \
 ### Java Websockets
 We will be using Java Websockets to host and join multiplayer (2 player) games.
 
+## Local Confirm Move preview
+
+Run `app.LocalMoveMain` in IntelliJ with Java 21. Select Aki at B3 or Cel at E4,
+select a highlighted destination, then press **Confirm Move**. Use **Cancel Move**
+or click the selected source again to cancel. Each character can move once; this
+preview does not implement End Turn, Cast Spell, Play Card, or multiplayer.
+
+For an existing local match, call `ClientAppBuilder.buildLocalGame` on the Swing
+event dispatch thread with the authoritative `Game`, canonical local `Player`,
+and existing `ViewState<GameViewModel>`. Hand, pile, timer and status information
+in that state is preserved. After other board, turn or action changes, call the
+returned presenter's `refreshGameView()` on the event thread to publish the board
+and invalidate pending selections. Build a new binding when the match changes.
+The view model's movement revision is presentation-only, not a game revision.
+
+Multiplayer still requires authenticated connection-to-player/match binding,
+authoritative state publication, ordered responses, and a server-validated turn/
+board revision or equivalent token to reject stale coordinate-only requests.
+All server-side board, action and turn mutations must use the same `Game` lock.
+Cast Spell must record successful casts; End Turn must call `beginNextTurn()` at
+its successful transition. No network protocol or shared revision system is
+implemented by this local preview.
+
 ## AI Usage Disclosure
 Generative AI was used to generate part of the code for this project. In particular, the following things are entirely
 generated or heavily co-opted by an LLM:

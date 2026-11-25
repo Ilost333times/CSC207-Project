@@ -23,6 +23,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.OptionalInt;
 import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 
 final class BoardPanel extends JPanel {
     private static final int SIZE = GameViewModel.BOARD_SIZE;
@@ -38,6 +39,10 @@ final class BoardPanel extends JPanel {
     private double gridInset = artwork == null ? 0 : ART_GRID_INSET;
 
     BoardPanel(BiConsumer<Point, Integer> showTile) {
+        this(showTile, position -> { });
+    }
+
+    BoardPanel(BiConsumer<Point, Integer> showTile, Consumer<Point> selectTile) {
         setLayout(null);
         setOpaque(false);
         grid.setOpaque(false);
@@ -48,7 +53,7 @@ final class BoardPanel extends JPanel {
         for (int row = 0; row < SIZE; row++) {
             for (int column = 0; column < SIZE; column++) {
                 Point position = new Point(column, row);
-                TileButton tile = new TileButton(position, showTile);
+                TileButton tile = new TileButton(position, showTile, selectTile);
                 tiles[row][column] = tile;
                 grid.add(tile);
             }
@@ -137,7 +142,7 @@ final class BoardPanel extends JPanel {
         private boolean rangeHighlighted;
         private Point pointer;
 
-        TileButton(Point position, BiConsumer<Point, Integer> showTile) {
+        TileButton(Point position, BiConsumer<Point, Integer> showTile, Consumer<Point> selectTile) {
             coordinate = String.valueOf((char) ('A' + position.x)) + (position.y + 1);
             fallback = (position.x + position.y) % 2 == 0 ? GameViewStyle.TILE_LIGHT : GameViewStyle.TILE_DARK;
             GameViewStyle.configureButton(this);
@@ -162,7 +167,7 @@ final class BoardPanel extends JPanel {
             addMouseListener(inspectCard);
             addMouseMotionListener(inspectCard);
             addActionListener(event -> {
-                // TODO: Send the clicked tile and spell index to the placement, movement or cast controller.
+                selectTile.accept(new Point(position));
             });
         }
 

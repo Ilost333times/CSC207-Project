@@ -7,6 +7,9 @@ public class CharacterCard extends Card {
     private int currentHP;
     private final int speed;
     private boolean KOd;
+    private boolean movedThisTurn;
+    private boolean castThisTurn;
+    private boolean previouslyKnockedOut;
 
     public CharacterCard(Player owner, String name, int hp, int speed) {
         super(owner, name);
@@ -25,6 +28,7 @@ public class CharacterCard extends Card {
         // KO this char
         if (this.currentHP == 0) {
             this.KOd = true;
+            this.previouslyKnockedOut = true;
         }
 
         // Un-KO this char (If KO'd and Healed)
@@ -47,5 +51,28 @@ public class CharacterCard extends Card {
 
     public int getSpeed() {
         return this.speed;
+    }
+
+    public boolean hasMovedThisTurn() { return movedThisTurn; }
+
+    public boolean hasCastThisTurn() { return castThisTurn; }
+
+    /** Retained through healing/revival until movement eligibility after KO is confirmed. */
+    public boolean hasBeenKnockedOut() { return previouslyKnockedOut; }
+
+    public void recordMove() {
+        if (movedThisTurn || castThisTurn) {
+            throw new IllegalStateException("A character cannot move twice or after casting.");
+        }
+        movedThisTurn = true;
+    }
+
+    /** Called after a successful cast; does not impose an unconfirmed limit on cast count. */
+    public void recordCast() { castThisTurn = true; }
+
+    /** Called only when this character's owner's next turn begins. */
+    public void resetTurnActions() {
+        movedThisTurn = false;
+        castThisTurn = false;
     }
 }

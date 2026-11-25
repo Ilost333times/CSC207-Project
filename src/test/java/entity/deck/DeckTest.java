@@ -13,10 +13,23 @@ import java.util.Set;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class DeckTest {
     private final Deck deck = new Deck();
     private final Player player = new Player("Player 1");
+
+    @Test
+    void cardSnapshotIsReadOnlyAndDoesNotRemoveOrCopyCards() {
+        Card character = new CharacterCard(player, "Aki", 200, 3);
+        deck.addCard(character);
+        var cards = deck.getCards();
+        assertSame(character, cards.getFirst());
+        assertThrows(UnsupportedOperationException.class, cards::clear);
+        assertSame(character, deck.drawCard());
+        assertEquals(1, cards.size());
+        assertTrue(deck.isEmpty());
+    }
 
     @Test
     void drawsTheMostRecentlyAddedCardFirst() {

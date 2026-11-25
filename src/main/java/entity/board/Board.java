@@ -6,6 +6,10 @@ import entity.card.CharacterCard;
 import entity.card.SorceryCard;
 import entity.card.SpellCard;
 
+import java.util.ArrayDeque;
+import java.util.HashSet;
+import java.util.Set;
+
 public class Board {
     private Tile[][] board = new Tile[6][6];
     public Board() {
@@ -22,8 +26,63 @@ public class Board {
     /// @param i The x position of the target tile
     /// @param j The y position of the target tile
     public void moveTile(int x, int y, int i, int j) {
-        this.board[i][j].setTile(board[x][y]);
-        this.board[x][y].clearTile();
+        Tile source = this.board[x][y];
+        Tile destination = this.board[i][j];
+        if (x == i && y == j) {
+            throw new IllegalMoveException("Source and destination must be different tiles.");
+        }
+        if (!isMovementDestinationEmpty(i, j)) {
+            throw new IllegalMoveException("Target space is occupied.");
+        }
+        destination.setTile(source);
+        source.clearTile();
+    }
+
+    public boolean isInBounds(int x, int y) {
+        return x >= 0 && x < board.length && y >= 0 && y < board[x].length;
+    }
+
+    /** Conservatively excludes sorcery-only and spell-only tiles pending their movement rules. */
+    public boolean isMovementDestinationEmpty(int x, int y) {
+        if (!isInBounds(x, y)) {
+            return false;
+        }
+        Tile tile = board[x][y];
+        return tile.isEmpty() && (tile.getSpells() == null || tile.getSpells().isEmpty());
+    }
+
+    /**
+     * Finds destinations by shortest orthogonal path, excluding the source.
+     * This is geometry only; the use case also checks ownership, turn and actions.
+     */
+    public Set<BoardPosition> getReachableDestinations(int sourceX, int sourceY, int speed) {
+        if (!isInBounds(sourceX, sourceY) || speed <= 0
+                || board[sourceX][sourceY].getCharacterCard() == null) {
+            return Set.of();
+        }
+        Set<BoardPosition> reachable = new HashSet<>();
+        Set<BoardPosition> visited = new HashSet<>();
+        ArrayDeque<BoardPosition> queue = new ArrayDeque<>();
+        BoardPosition source = new BoardPosition(sourceX, sourceY);
+        visited.add(source);
+        queue.add(source);
+        int[][] steps = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+        for (int distance = 0; distance < speed && !queue.isEmpty(); distance++) {
+            int levelSize = queue.size();
+            for (int index = 0; index < levelSize; index++) {
+                BoardPosition position = queue.remove();
+                for (int[] step : steps) {
+                    int x = position.x() + step[0];
+                    int y = position.y() + step[1];
+                    BoardPosition next = new BoardPosition(x, y);
+                    if (isMovementDestinationEmpty(x, y) && visited.add(next)) {
+                        reachable.add(next);
+                        queue.add(next);
+                    }
+                }
+            }
+        }
+        return Set.copyOf(reachable);
     }
 
     /// Attempts to Play a Card onto the tile at (x, y)
